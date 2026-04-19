@@ -1,81 +1,95 @@
 /**
  * @name 全豆要聚合音源
  * @author iamcool666
- * @version 5.7.0
+ * @version 5.8.0
+ * @description 提取 v5.0 核心逻辑：聚合 星海/溯音/念心/长青/汽水，多链路自动回退
  */
 
 const { axios } = require("@musicfree/util");
 
-// 核心接口定义
-const APIS = {
-    xinghai: "https://music-api.gdstudio.xyz/api.php?use_xbridge3=true&loader_name=forest&need_sec_link=1&sec_link_scene=im",
-    qishui: "https://api.vsaa.cn/api/music.qishui.vip",
-    changqing: "http://175.27.166.236",
-    nianxin: "https://music.nxinxz.com"
-};
+// --- 核心配置 (完全保留自 v5.0 原稿) ---
+const XINGHAI_MAIN_API = "https://music-api.gdstudio.xyz/api.php?use_xbridge3=true&loader_name=forest&need_sec_link=1&sec_link_scene=im";
+const QISHUI_API = "https://api.vsaa.cn/api/music.qishui.vip";
+const CHANGQING_WY = "http://175.27.166.236/wy/wy.php?type=mp3&id={id}&level={level}";
+const NIANXIN_WY = "http://music.nxinxz.com/wy.php?id={id}&level={level}&type=mp3";
 
-// 1. 搜索函数
+/**
+ * 搜索逻辑 (复刻 v5.0 汽水搜索)
+ */
 async function search(keyword, page, type) {
     if (type !== "music") return null;
     try {
-        const res = await axios.get(APIS.qishui, {
+        const res = await axios.get(QISHUI_API, {
             params: { act: "search", keywords: keyword, page: page, pagesize: 20, type: "music" }
         });
         const list = res.data?.data?.lists || [];
         return {
             isEnd: list.length < 20,
-            data: list.map((item) => ({
+            data: list.map(item => ({
                 id: String(item.id || item.vid),
-                name: String(item.name || "未知歌曲"),
-                artist: String(item.artists || "未知歌手"),
+                name: String(item.name),
+                artist: String(item.artists),
                 album: String(item.album || ""),
                 img: String(item.cover || item.pic || ""),
-                platform: "netease" 
+                platform: "netease" // 内部逻辑锚点
             }))
         };
     } catch (e) { return null; }
 }
 
-// 2. 播放链接获取（多链路回退）
+/**
+ * 播放链接回退逻辑 (核心手术：将 v5.0 的并发尝试转为 MusicFree 兼容的顺序回退)
+ */
 async function getMediaSource(item, quality) {
     const id = item.id;
-    const br = { low: "128", standard: "320", high: "320", super: "740" }[quality] || "128";
-    const level = quality === "low" ? "standard" : "lossless";
+    const level = quality === 'low' ? 'standard' : 'lossless';
+    const br = { 'low': '128', 'standard': '320', 'high': '320', 'super': '740' }[quality] || '128';
 
-    // 链路1：星海
+    // 链路1：星海主接口
     try {
-        const r1 = await axios.get(`${APIS.xinghai}&types=url&source=netease&id=${id}&br=${br}`);
+        const r1 = await axios.get(`${XINGHAI_MAIN_API}&types=url&source=netease&id=${id}&br=${br}`);
         if (r1.data?.url) return { url: r1.data.url };
     } catch (e) {}
 
-    // 链路2：长青
+    // 链路2：长青SVIP
     try {
-        const r2 = await axios.get(`${APIS.changqing}/wy/wy.php?type=mp3&id=${id}&level=${level}`);
+        const url2 = CHANGQING_WY.replace("{id}", id).replace("{level}", level);
+        const r2 = await axios.get(url2);
         if (r2.data?.url) return { url: r2.data.url };
     } catch (e) {}
 
-    // 链路3：念心
+    // 链路3：念心SVIP
     try {
-        const r3 = await axios.get(`${APIS.nianxin}/wy.php?id=${id}&level=${level}&type=mp3`);
+        const url3 = NIANXIN_WY.replace("{id}", id).replace("{level}", level);
+        const r3 = await axios.get(url3);
         if (r3.data?.url) return { url: r3.data.url };
+    } catch (e) {}
+
+    // 链路4：溯音/汽水保底
+    try {
+        const r4 = await axios.get(QISHUI_API, { params: { act: "song", id: id } });
+        const songUrl = r4.data?.data?.[0]?.url || r4.data?.data?.url;
+        if (songUrl) return { url: songUrl };
     } catch (e) {}
 
     return null;
 }
 
-// 3. 歌词获取
+/**
+ * 歌词逻辑
+ */
 async function getLyric(item) {
     try {
-        const res = await axios.get(APIS.qishui, { params: { act: "song", id: item.id } });
+        const res = await axios.get(QISHUI_API, { params: { act: "song", id: item.id } });
         const data = res.data?.data?.[0] || res.data?.data;
         return { lyric: data?.lyric || "" };
     } catch (e) { return null; }
 }
 
-// 4. 导出对象 (MusicFree 必须包含此项)
+// --- 模块化外壳 (完全参照 Xiaoqiu.js 规范) ---
 module.exports = {
     platform: "全豆要聚合",
-    version: "5.7.0",
+    version: "5.8.0",
     author: "iamcool666",
     search,
     getMediaSource,
