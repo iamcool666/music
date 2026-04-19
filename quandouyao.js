@@ -1,117 +1,115 @@
-"use strict";
-
-const axios = require("axios");
-
 /**
- * @name 全豆要聚合音源插件
- * @version 0.5.0
- * @author 全豆要 & Gemini
- * @description 适配 MusicFree 框架，集成星海/溯音/长青/念心等多链路自动回退
+ * @name 全豆要聚合音源
+ * @version 5.0.0
+ * @author iamcool666
+ * @description 适配MusicFree，聚合星海/长青/念心/汽水多链路回退
  */
 
-// --- 接口配置 ---
+const { axios } = require("@musicfree/util");
+
+// --- 接口常量定义 ---
 const XINGHAI_API = "https://music-api.gdstudio.xyz/api.php?use_xbridge3=true&loader_name=forest&need_sec_link=1&sec_link_scene=im";
 const CHANGQING_BASE = "http://175.27.166.236";
 const NIANXIN_BASE = "https://music.nxinxz.com";
+const QISHUI_API = "https://api.vsaa.cn/api/music.qishui.vip";
 
-// 音质映射 (MusicFree quality -> 各接口参数)
-const qualityMap = {
-    low: { xing: "128", cq: "standard", nx: "128k" },
-    standard: { xing: "320", cq: "standard", nx: "320k" },
-    high: { xing: "320", cq: "lossless", nx: "flac" },
-    super: { xing: "740", cq: "lossless", nx: "flac" },
+// 平台映射
+const PLATFORM_MAP = {
+    'netease': { xing: 'netease', cq: 'wy', nx: 'wy' },
+    'tencent': { xing: 'tencent', cq: 'tx', nx: 'tx' },
+    'kuwo': { xing: 'kuwo', cq: 'kw', nx: 'kw' },
+    'kugou': { xing: 'kugou', cq: 'kg', nx: 'kg' },
+    'migu': { xing: 'migu', cq: 'mg', nx: 'mg' }
 };
-
-// 平台映射 (MusicFree 内部平台名 -> 接口参数)
-const platformMap = {
-    tx: { xing: "tencent", cq: "tx", nx: "tx" },
-    wy: { xing: "netease", cq: "wy", nx: "wy" },
-    kw: { xing: "kuwo", cq: "kw", nx: "kw" },
-    kg: { xing: "kugou", cq: "kg", nx: "kg" },
-    mg: { xing: "migu", cq: "mg", nx: "mg" }
-};
-
-// --- 核心获取逻辑 ---
 
 /**
- * 核心：多链路获取URL
+ * 搜索功能（使用汽水音源作为搜索入口）
  */
-async function getUrlFromAllSources(musicItem, quality) {
-    const platform = musicItem.platform || 'tx'; // 默认为QQ
-    const mapping = platformMap[platform] || platformMap['tx'];
-    const qCfg = qualityMap[quality] || qualityMap['standard'];
-    const songId = musicItem.songmid || musicItem.id;
-
-    // 链路1：星海主接口
+async function search(keyword, page, type) {
+    if (type !== 'music') return null;
     try {
-        const res = await axios.get(`${XINGHAI_API}&types=url&source=${mapping.xing}&id=${songId}&br=${qCfg.xing}`);
-        if (res.data && res.data.url && res.data.url.startsWith('http')) {
-            return res.data.url;
-        }
-    } catch (e) {}
-
-    // 链路2：长青 SVIP 模板
-    try {
-        let cqUrl = "";
-        if (mapping.cq === 'wy') cqUrl = `${CHANGQING_BASE}/wy/wy.php?type=mp3&id=${songId}&level=${qCfg.cq}`;
-        else if (mapping.cq === 'tx') cqUrl = `${CHANGQING_BASE}/kgqq/qq.php?type=mp3&id=${songId}&level=${qCfg.cq}`;
-        else if (mapping.cq === 'kw') cqUrl = `https://musicapi.haitangw.net/music/kw.php?type=mp3&id=${songId}&level=${qCfg.cq}`;
-        
-        if (cqUrl) {
-            const res = await axios.get(cqUrl);
-            if (typeof res.data === 'string' && res.data.startsWith('http')) return res.data;
-            if (res.data && res.data.url) return res.data.url;
-        }
-    } catch (e) {}
-
-    // 链路3：念心 SVIP 模板
-    try {
-        let nxUrl = "";
-        const level = qCfg.cq; // 使用长青的level逻辑
-        if (mapping.nx === 'wy') nxUrl = `${NIANXIN_BASE}/wy.php?id=${songId}&level=${level}&type=mp3`;
-        else if (mapping.nx === 'tx') nxUrl = `${NIANXIN_BASE}/kgqq/tx.php?id=${songId}&level=${level}&type=mp3`;
-        else if (mapping.nx === 'kw') nxUrl = `${NIANXIN_BASE}/kw.php?id=${songId}&level=${level}&type=mp3`;
-
-        if (nxUrl) {
-            const res = await axios.get(nxUrl);
-            if (res.data && res.data.url) return res.data.url;
-        }
-    } catch (e) {}
-
-    throw new Error("所有解析链路均已失效");
+        const res = await axios.get(QISHUI_API, {
+            params: { act: "search", keywords: keyword, page: page, pagesize: 20, type: "music" }
+        });
+        const list = res.data?.data?.lists || [];
+        return {
+            isEnd: list.length < 20,
+            data: list.map(item => ({
+                id: item.id || item.vid,
+                name: item.name,
+                artist: item.artists,
+                album: item.album,
+                img: item.cover || item.pic,
+                // 默认将搜索结果归类到网易云逻辑进行解析，或根据接口返回调整
+                platform: "netease" 
+            }))
+        };
+    } catch (e) {
+        return null;
+    }
 }
 
-// --- 插件导出接口 ---
+/**
+ * 核心播放源获取（多链路自动回退逻辑）
+ */
+async function getMediaSource(item, quality) {
+    const platform = item.platform || 'netease';
+    const mapping = PLATFORM_MAP[platform] || PLATFORM_MAP['netease'];
+    const id = item.id;
 
+    // 音质参数处理
+    const brMap = { 'low': '128', 'standard': '320', 'high': '320', 'super': '740' };
+    const level = quality === 'low' ? 'standard' : 'lossless';
+
+    // 1. 尝试星海接口
+    try {
+        const res = await axios.get(`${XINGHAI_API}&types=url&source=${mapping.xing}&id=${id}&br=${brMap[quality] || '128'}`);
+        if (res.data?.url) return { url: res.data.url };
+    } catch (e) {}
+
+    // 2. 尝试长青接口
+    try {
+        let cqUrl = mapping.cq === 'wy' 
+            ? `${CHANGQING_BASE}/wy/wy.php?type=mp3&id=${id}&level=${level}`
+            : `${CHANGQING_BASE}/kgqq/qq.php?type=mp3&id=${id}&level=${level}`;
+        const res = await axios.get(cqUrl);
+        if (res.data?.url) return { url: res.data.url };
+        if (typeof res.data === 'string' && res.data.startsWith('http')) return { url: res.data };
+    } catch (e) {}
+
+    // 3. 尝试念心接口
+    try {
+        let nxUrl = mapping.nx === 'wy'
+            ? `${NIANXIN_BASE}/wy.php?id=${id}&level=${level}&type=mp3`
+            : `${NIANXIN_BASE}/kgqq/tx.php?id=${id}&level=${level}&type=mp3`;
+        const res = await axios.get(nxUrl);
+        if (res.data?.url) return { url: res.data.url };
+    } catch (e) {}
+
+    return null;
+}
+
+/**
+ * 歌词获取
+ */
+async function getLyric(item) {
+    try {
+        const res = await axios.get(QISHUI_API, {
+            params: { act: "song", id: item.id }
+        });
+        const data = res.data?.data?.[0] || res.data?.data;
+        return { lyric: data?.lyric || "" };
+    } catch (e) {
+        return null;
+    }
+}
+
+// 导出 MusicFree 插件
 module.exports = {
     platform: "全豆要聚合",
-    author: "全豆要 & Gemini",
-    version: "0.5.0",
-    srcUrl: "", // 可填写你的托管地址
-    cacheControl: "no-cache",
-    
-    primaryKey: ["id", "songmid"],
-    
-    /**
-     * 获取媒体源
-     */
-    async getMediaSource(musicItem, quality) {
-        const url = await getUrlFromAllSources(musicItem, quality);
-        return {
-            url: url,
-        };
-    },
-
-    /**
-     * 搜索逻辑 (这里复用 xiaoqiu.js 的搜索框架，你可以按需修改)
-     * 注意：由于 MusicFree 的搜索依赖于具体平台的 API，这里建议保持各平台独立搜索，仅在播放时聚合。
-     */
-    async search(query, page, type) {
-        // 此处建议使用 MusicFree 的各平台插件进行搜索
-        // 若需在此插件实现搜索，可参考 xiaoqiu.js 原有的 searchBase 逻辑实现 QQ/网易搜索
-        return {
-            isEnd: true,
-            data: []
-        };
-    },
+    version: "5.0.0",
+    order: 1,
+    search,
+    getMediaSource,
+    getLyric
 };
