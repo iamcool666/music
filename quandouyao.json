@@ -1,0 +1,133 @@
+/**
+ * @name 全豆要-聚合音源
+ * @version 1.0.0
+ * @author 全豆要 & Gemini
+ * @description 适配 MusicFree。聚合 星海/溯音/念心/长青/歌一刀专属汽水音乐，支持多链路自动回退。
+ */
+
+const axios = require("axios");
+
+// --- API 配置 (保留原脚本核心端点) ---
+const XINGHAI_MAIN_API = "https://music-api.gdstudio.xyz/api.php?use_xbridge3=true&loader_name=forest&need_sec_link=1&sec_link_scene=im&theme=light";
+const QISHUI_API = "https://api.vsaa.cn/api/music.qishui.vip";
+const SUYIN_QQ_API = "https://oiapi.net/api/QQ_Music";
+const SUYIN_QQ_KEY = "oiapi-ef6133b7-ac2f-dc7d-878c-d3e207a82575";
+
+const PLATFORM_MAP = {
+    'netease': 'wy',
+    'qq': 'tx',
+    'kuwo': 'kw',
+    'kugou': 'kg',
+    'migu': 'mg'
+};
+
+const pluginInstance = {
+    // 1. 搜索功能（主要通过汽水API实现）
+    async search(query, page, type) {
+        if (type !== 'music') return null;
+        
+        const res = await axios.get(QISHUI_API, {
+            params: {
+                act: "search",
+                keywords: query,
+                page: page,
+                pagesize: 20,
+                type: "music"
+            }
+        });
+
+        const list = res.data?.data?.lists || [];
+        return {
+            isEnd: list.length < 20,
+            data: list.map(item => ({
+                id: item.id || item.vid,
+                name: item.name,
+                artist: item.artists,
+                album: item.album,
+                duration: item.duration ? Math.floor(item.duration / 1000) : 0,
+                img: item.pic || item.cover,
+                // 标记为汽水源，以便 getMediaSource 识别
+                source: "qishui" 
+            }))
+        };
+    },
+
+    // 2. 获取播放链接（核心 Fallback 逻辑）
+    async getMediaSource(musicItem, quality) {
+        const platform = PLATFORM_MAP[musicItem.source] || 'tx';
+        const id = musicItem.id;
+
+        // 策略 A: 如果是汽水原生搜索结果
+        if (musicItem.source === "qishui") {
+            return await this.getQishuiUrl(id, quality);
+        }
+
+        // 策略 B: 多链路回退逻辑
+        const handlers = [
+            this.getXinghaiUrl.bind(this),
+            this.getSuyinUrl.bind(this),
+            this.getVipTemplateUrl.bind(this)
+        ];
+
+        for (const handler of handlers) {
+            try {
+                const url = await handler(platform, id, quality, musicItem);
+                if (url && url.startsWith('http')) return { url };
+            } catch (e) {
+                continue;
+            }
+        }
+        return null;
+    },
+
+    // 3. 获取歌词
+    async getLyric(musicItem) {
+        try {
+            const res = await axios.get(QISHUI_API, {
+                params: { act: "song", id: musicItem.id }
+            });
+            const lyric = res.data?.data?.[0]?.lyric;
+            return lyric ? { lyric } : null;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    // --- 内部工具函数 ---
+
+    async getQishuiUrl(id, quality) {
+        const qMap = { 'low': '128k', 'standard': '320k', 'high': 'flac' };
+        const res = await axios.get(QISHUI_API, {
+            params: { act: "song", id, quality: qMap[quality] || '128k' }
+        });
+        return res.data?.data?.[0]?.url;
+    },
+
+    async getXinghaiUrl(platform, id, quality) {
+        const brMap = { 'low': '128', 'standard': '320', 'high': '740', 'super': '999' };
+        const sourceMap = { 'wy': 'netease', 'tx': 'tencent', 'kw': 'kuwo', 'kg': 'kugou', 'mg': 'migu' };
+        
+        const url = `${XINGHAI_MAIN_API}&types=url&source=${sourceMap[platform]}&id=${id}&br=${brMap[quality] || '128'}`;
+        const res = await axios.get(url);
+        return res.data?.url;
+    },
+
+    async getSuyinUrl(platform, id, quality) {
+        if (platform !== 'tx') throw new Error("Only QQ");
+        const res = await axios.get(SUYIN_QQ_API, {
+            params: { key: SUYIN_QQ_KEY, type: "json", mid: id, br: 7 }
+        });
+        return res.data?.url || res.data?.music;
+    },
+
+    async getVipTemplateUrl(platform, id, quality) {
+        // 长青/念心 模板简易实现
+        const templates = {
+            tx: `https://music.nxinxz.com/kgqq/tx.php?id=${id}&level=standard&type=mp3`,
+            wy: `http://music.nxinxz.com/wy.php?id=${id}&level=standard&type=mp3`
+        };
+        return templates[platform] || null;
+    }
+};
+
+module.exports = pluginInstance;
