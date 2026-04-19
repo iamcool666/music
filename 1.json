@@ -1,8 +1,74 @@
 [
   {
-    "name": "全豆要聚合音源v5.0",
+    "name": "全都妖聚合",
     "author": "iamcool666",
-    "version": "5.0.0",
-    "src": "https://raw.githubusercontent.com/iamcool666/music/main/quandouyao.js"
+    "version": "6.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/quandouyao.js"
+  },
+  {
+    "name": "网易音乐",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/网易音乐.js"
+  },
+  {
+    "name": "腾讯音乐",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/腾讯音乐.js"
+  },
+  {
+    "name": "酷狗音乐",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/酷狗.js"
+  },
+  {
+    "name": "酷我音乐",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/酷我.js"
+  },
+  {
+    "name": "汽水VIP",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/汽水vip.js"
+  },
+  {
+    "name": "元力QQ",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/元力QQ.js"
+  },
+  {
+    "name": "元力WY",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/元力WY.js"
+  },
+  {
+    "name": "弥音QQ",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/弥音QQ.js"
+  },
+  {
+    "name": "哔哩哔哩",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/bilibili.js"
+  },
+  {
+    "name": "Youtube",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/Youtube.js"
+  },
+  {
+    "name": "Suno",
+    "author": "Nairocy",
+    "version": "1.0.0",
+    "src": "https://fastly.jsdelivr.net/gh/iamcool666/music@main/suno.js"
   }
 ]
