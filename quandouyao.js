@@ -1,12 +1,12 @@
 /**
  * @name 全豆要聚合音源
- * @version 5.1.0
  * @author iamcool666
- * @description 适配 MusicFree 订阅，聚合多链路回退
+ * @version 5.3.0
  */
 
 const { axios } = require("@musicfree/util");
 
+// --- 接口定义 ---
 const APIS = {
     xinghai: "https://music-api.gdstudio.xyz/api.php?use_xbridge3=true&loader_name=forest&need_sec_link=1&sec_link_scene=im",
     qishui: "https://api.vsaa.cn/api/music.qishui.vip",
@@ -14,33 +14,29 @@ const APIS = {
     nianxin: "https://music.nxinxz.com"
 };
 
-// 内部搜索函数
-async function search(keyword, page) {
-    try {
-        const res = await axios.get(APIS.qishui, {
-            params: { act: "search", keywords: keyword, page: page, pagesize: 20, type: "music" }
-        });
-        const list = res.data?.data?.lists || [];
-        return {
-            isEnd: list.length < 20,
-            data: list.map(item => ({
-                id: item.id || item.vid,
-                name: item.name,
-                artist: item.artists,
-                album: item.album,
-                img: item.cover || item.pic,
-                // 这里统一挂载到一个逻辑，方便获取链接时处理
-                platform: "netease" 
-            }))
-        };
-    } catch (e) { return { isEnd: true, data: [] }; }
+async function search(keyword, page, type) {
+    if (type !== "music") return null;
+    const res = await axios.get(APIS.qishui, {
+        params: { act: "search", keywords: keyword, page: page, pagesize: 20, type: "music" }
+    });
+    const list = res.data?.data?.lists || [];
+    return {
+        isEnd: list.length < 20,
+        data: list.map((item) => ({
+            id: item.id || item.vid,
+            name: item.name,
+            artist: item.artists,
+            album: item.album,
+            img: item.cover || item.pic,
+            platform: "netease" // 内部逻辑锚点
+        }))
+    };
 }
 
-// 核心：获取播放链接
 async function getMediaSource(item, quality) {
     const id = item.id;
-    const br = { 'low': '128', 'standard': '320', 'high': '320', 'super': '740' }[quality] || '128';
-    const level = quality === 'low' ? 'standard' : 'lossless';
+    const br = { low: "128", standard: "320", high: "320", super: "740" }[quality] || "128";
+    const level = quality === "low" ? "standard" : "lossless";
 
     // 链路1：星海
     try {
@@ -63,18 +59,17 @@ async function getMediaSource(item, quality) {
     return null;
 }
 
-// 获取歌词
 async function getLyric(item) {
-    try {
-        const res = await axios.get(APIS.qishui, { params: { act: "song", id: item.id } });
-        const data = res.data?.data?.[0] || res.data?.data;
-        return { lyric: data?.lyric || "" };
-    } catch (e) { return null; }
+    const res = await axios.get(APIS.qishui, { params: { act: "song", id: item.id } });
+    const data = res.data?.data?.[0] || res.data?.data;
+    return { lyric: data?.lyric || "" };
 }
 
+// 仿照 xiaoqiu.js 的导出结构
 module.exports = {
     platform: "全豆要聚合",
-    version: "5.1.0",
+    version: "5.3.0",
+    author: "iamcool666",
     search,
     getMediaSource,
     getLyric
