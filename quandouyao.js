@@ -1,96 +1,97 @@
 /**
  * @name 全豆要聚合音源
  * @author iamcool666
- * @version 5.8.0
- * @description 提取 v5.0 核心逻辑：聚合 星海/溯音/念心/长青/汽水，多链路自动回退
+ * @version 6.0.0
+ * @description 终极兼容版：补齐 MusicFree 引擎所需的全部声明
  */
 
-const { axios } = require("@musicfree/util");
+// 修正 1：改用最标准的 axios 引入方式，防止底层包路径不兼容
+const axios = require("axios");
 
-// --- 核心配置 (完全保留自 v5.0 原稿) ---
-const XINGHAI_MAIN_API = "https://music-api.gdstudio.xyz/api.php?use_xbridge3=true&loader_name=forest&need_sec_link=1&sec_link_scene=im";
-const QISHUI_API = "https://api.vsaa.cn/api/music.qishui.vip";
-const CHANGQING_WY = "http://175.27.166.236/wy/wy.php?type=mp3&id={id}&level={level}";
-const NIANXIN_WY = "http://music.nxinxz.com/wy.php?id={id}&level={level}&type=mp3";
+const APIS = {
+    xinghai: "https://music-api.gdstudio.xyz/api.php?use_xbridge3=true&loader_name=forest&need_sec_link=1&sec_link_scene=im",
+    qishui: "https://api.vsaa.cn/api/music.qishui.vip",
+    changqing: "http://175.27.166.236",
+    nianxin: "https://music.nxinxz.com",
+    suyin: "https://oiapi.net/api/QQ_Music"
+};
 
-/**
- * 搜索逻辑 (复刻 v5.0 汽水搜索)
- */
 async function search(keyword, page, type) {
     if (type !== "music") return null;
     try {
-        const res = await axios.get(QISHUI_API, {
+        const res = await axios.get(APIS.qishui, {
             params: { act: "search", keywords: keyword, page: page, pagesize: 20, type: "music" }
         });
-        const list = res.data?.data?.lists || [];
+        const list = res?.data?.data?.lists || [];
         return {
             isEnd: list.length < 20,
             data: list.map(item => ({
                 id: String(item.id || item.vid),
-                name: String(item.name),
-                artist: String(item.artists),
+                name: String(item.name || "未知歌曲"),
+                artist: String(item.artists || "未知歌手"),
                 album: String(item.album || ""),
                 img: String(item.cover || item.pic || ""),
-                platform: "netease" // 内部逻辑锚点
+                platform: "netease" 
             }))
         };
-    } catch (e) { return null; }
+    } catch (e) {
+        return { isEnd: true, data: [] };
+    }
 }
 
-/**
- * 播放链接回退逻辑 (核心手术：将 v5.0 的并发尝试转为 MusicFree 兼容的顺序回退)
- */
 async function getMediaSource(item, quality) {
     const id = item.id;
     const level = quality === 'low' ? 'standard' : 'lossless';
     const br = { 'low': '128', 'standard': '320', 'high': '320', 'super': '740' }[quality] || '128';
 
-    // 链路1：星海主接口
     try {
-        const r1 = await axios.get(`${XINGHAI_MAIN_API}&types=url&source=netease&id=${id}&br=${br}`);
-        if (r1.data?.url) return { url: r1.data.url };
+        const r1 = await axios.get(`${APIS.xinghai}&types=url&source=netease&id=${id}&br=${br}`);
+        if (r1?.data?.url) return { url: r1.data.url };
     } catch (e) {}
 
-    // 链路2：长青SVIP
     try {
-        const url2 = CHANGQING_WY.replace("{id}", id).replace("{level}", level);
-        const r2 = await axios.get(url2);
-        if (r2.data?.url) return { url: r2.data.url };
+        const r2 = await axios.get(`${APIS.changqing}/wy/wy.php?type=mp3&id=${id}&level=${level}`);
+        if (r2?.data?.url) return { url: r2.data.url };
     } catch (e) {}
 
-    // 链路3：念心SVIP
     try {
-        const url3 = NIANXIN_WY.replace("{id}", id).replace("{level}", level);
-        const r3 = await axios.get(url3);
-        if (r3.data?.url) return { url: r3.data.url };
+        const r3 = await axios.get(`${APIS.nianxin}/wy.php?id=${id}&level=${level}&type=mp3`);
+        if (r3?.data?.url) return { url: r3.data.url };
     } catch (e) {}
 
-    // 链路4：溯音/汽水保底
     try {
-        const r4 = await axios.get(QISHUI_API, { params: { act: "song", id: id } });
-        const songUrl = r4.data?.data?.[0]?.url || r4.data?.data?.url;
-        if (songUrl) return { url: songUrl };
+        const r4 = await axios.get(APIS.suyin, {
+            params: { mid: id, type: "json", br: 4, key: "oiapi-ef6133b7-ac2f-dc7d-878c-d3e207a82575" }
+        });
+        if (r4?.data?.music) return { url: r4.data.music };
+    } catch (e) {}
+
+    try {
+        const r5 = await axios.get(APIS.qishui, { params: { act: "song", id: id } });
+        const url5 = r5?.data?.data?.[0]?.url || r5?.data?.data?.url;
+        if (url5) return { url: url5 };
     } catch (e) {}
 
     return null;
 }
 
-/**
- * 歌词逻辑
- */
 async function getLyric(item) {
     try {
-        const res = await axios.get(QISHUI_API, { params: { act: "song", id: item.id } });
-        const data = res.data?.data?.[0] || res.data?.data;
-        return { lyric: data?.lyric || "" };
-    } catch (e) { return null; }
+        const res = await axios.get(APIS.qishui, { params: { act: "song", id: item.id } });
+        const lyric = res?.data?.data?.[0]?.lyric || res?.data?.data?.lyric;
+        return { lyric: lyric || "" };
+    } catch (e) {
+        return { lyric: "" };
+    }
 }
 
-// --- 模块化外壳 (完全参照 Xiaoqiu.js 规范) ---
+// 修正 2：补齐所有严格要求的声明字段
 module.exports = {
     platform: "全豆要聚合",
-    version: "5.8.0",
     author: "iamcool666",
+    version: "6.0.0",
+    appVersion: ">=0.1.0", // 兜底声明：告诉引擎支持的版本
+    supportedSearchType: ["music"], // 致命修复：告诉引擎本插件支持搜索"单曲"，不加此项会导致引擎读取 undefined
     search,
     getMediaSource,
     getLyric
