@@ -1,0 +1,11 @@
+#EXTM3U
+#EXTINF:-1 tvg-name="河南新闻广播" group-title="河南电台",河南新闻广播 (FM95.4)
+http://live.hntv.tv/radio/news/playlist.m3u8
+#EXTINF:-1 tvg-name="河南交通广播" group-title="河南电台",河南交通广播 (FM104.1)
+http://live.hntv.tv/radio/traffic/playlist.m3u8
+#EXTINF:-1 tvg-name="河南MyRadio" group-title="河南电台",河南音乐广播 My Radio (FM90.0)
+http://live.hntv.tv/radio/myradio/playlist.m3u8
+#EXTINF:-1 tvg-name="河南经济广播" group-title="河南电台",河南经济广播 (FM103.2)
+http://live.hntv.tv/radio/economy/playlist.m3u8
+#EXTINF:-1 tvg-name="河南戏曲广播" group-title="河南电台",河南戏曲广播 (FM97.6)
+http://live.hntv.tv/radio/xiqu/playlist.m3u8
