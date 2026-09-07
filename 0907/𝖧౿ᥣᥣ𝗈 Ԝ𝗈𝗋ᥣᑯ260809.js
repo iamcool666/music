@@ -1,5 +1,5 @@
 /*!
- * @name 𝖧౿ᥣᥣ𝗈 Ԝ𝗈𝗋ᥣᑯ
+ * @name hello world
  * @author hello world
  * @version 260809
  * @description 缝合怪,轻点喷
